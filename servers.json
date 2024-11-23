@@ -1,0 +1,16 @@
+{
+    "servers": [
+        {
+            "name": "Proxy Server",
+            "host": "private.ip",
+            "user": "username",
+            "port": 22,
+            "proxy": "gateway.public.ip.address"
+        },
+        {
+            "name": "Other Server",
+            "host": "public.ip",
+            "user": "username"
+        }
+    ]
+}
