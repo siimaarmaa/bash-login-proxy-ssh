@@ -3,44 +3,44 @@
 # Path to JSON file
 json_file="servers.json"
 
-# Read the list of servers from JSON and correctly handle names with spaces
-servers=$(grep -oP '"name": *"\K[^"]+' "$json_file")
+# Read server names (portable: sed instead of grep -P)
+servers=()
+while IFS= read -r line; do
+    servers+=("$line")
+done < <(sed -n 's/.*"name": *"\([^"]*\)".*/\1/p' "$json_file")
+
+if [[ ${#servers[@]} -eq 0 ]]; then
+    echo "No servers found in $json_file"
+    exit 1
+fi
 
 # Present server options
 echo "Available servers:"
-index=1
-declare -A server_map
-while IFS= read -r server; do
-    echo "$index) $server"
-    server_map[$index]="$server"
-    ((index++))
-done <<< "$servers"
+for i in "${!servers[@]}"; do
+    echo "$((i+1))) ${servers[$i]}"
+done
 
 # Get user's choice
 read -p "Select a server to connect: " choice
 
 # Validate input
-if [[ -z "${server_map[$choice]}" ]]; then
+if ! [[ "$choice" =~ ^[0-9]+$ ]] || (( choice < 1 || choice > ${#servers[@]} )); then
     echo "Invalid selection. Exiting."
     exit 1
 fi
 
+selected_name="${servers[$((choice-1))]}"
+
 # Extract server details for the selected server
-selected_name="${server_map[$choice]}"
-host=$(grep -A 4 "\"name\": \"$selected_name\"" "$json_file" | grep '"host":' | awk -F'"' '{print $4}')
-user=$(grep -A 4 "\"name\": \"$selected_name\"" "$json_file" | grep '"user":' | awk -F'"' '{print $4}')
+block=$(grep -A 4 "\"name\": \"$selected_name\"" "$json_file")
+host=$(echo "$block"  | grep '"host":'  | awk -F'"' '{print $4}')
+user=$(echo "$block"  | grep '"user":'  | awk -F'"' '{print $4}')
+port=$(echo "$block"  | grep '"port":'  | awk -F': ' '{print $2}' | tr -d ', ')
+proxy=$(echo "$block" | grep '"proxy":' | awk -F'"' '{print $4}')
 
-# Check if a port is specified, otherwise use default port 22
-port=$(grep -A 4 "\"name\": \"$selected_name\"" "$json_file" | grep '"port":' | awk -F': ' '{print $2}' | tr -d ',')
+port=${port:-22}
 
-if [[ -z "$port" ]]; then
-    port=22
-fi
-
-# Check if a proxy is specified
-proxy=$(grep -A 4 "\"name\": \"$selected_name\"" "$json_file" | grep '"proxy":' | awk -F'"' '{print $4}')
-
-# If proxy exists, use ProxyCommand for SSH
+# Connect
 if [[ -n "$proxy" ]]; then
     echo "Connecting to $user@$host via $proxy on port $port ..."
     ssh -o ProxyCommand="ssh -W %h:%p root@$proxy" -p "$port" "$user@$host"
